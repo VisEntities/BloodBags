@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Blood Bags", "VisEntities", "2.0.0")]
+    [Info("Blood Bags", "VisEntities", "2.1.0")]
     [Description("Craft and use blood bags to restore health, stop bleeding, boost hydration, and more.")]
     public class BloodBags : RustPlugin
     {
@@ -69,6 +69,9 @@ namespace Oxide.Plugins
 
             [JsonProperty("Workbench Level Required")]
             public float WorkbenchLevelRequired { get; set; }
+
+            [JsonProperty("Health Sacrifice Amount")]
+            public float HealthSacrificeAmount { get; set; }
 
             [JsonProperty("Crafting Time Seconds")]
             public float CraftingTimeSeconds { get; set; }
@@ -145,6 +148,11 @@ namespace Oxide.Plugins
             if (string.Compare(_config.Version, "1.0.0") < 0)
                 _config = defaultConfig;
 
+            if (string.Compare(_config.Version, "2.1.0") < 0)
+            {
+                _config.Crafting.HealthSacrificeAmount = defaultConfig.Crafting.HealthSacrificeAmount;
+            }
+
             PrintWarning("Config update complete! Updated from version " + _config.Version + " to " + Version.ToString());
             _config.Version = Version.ToString();
         }
@@ -165,6 +173,7 @@ namespace Oxide.Plugins
                 {
                     Command = "craftblood",
                     WorkbenchLevelRequired = 1,
+                    HealthSacrificeAmount = 15f,
                     CraftingTimeSeconds = 10f,
                     Ingredients = new List<ItemInfo>
                     {
@@ -491,6 +500,16 @@ namespace Oxide.Plugins
                 return;
             }
 
+            if (player.health > _config.Crafting.HealthSacrificeAmount)
+            {
+                player.Hurt(_config.Crafting.HealthSacrificeAmount);
+            }
+            else
+            {
+                SendReplyToPlayer(player, Lang.InsufficientHealth, _config.Crafting.HealthSacrificeAmount);
+                return;
+            }
+
             foreach (ItemInfo ingredient in _config.Crafting.Ingredients)
             {
                 int amount = GetItemFromPlayer(player, ingredient.ItemDefinition.itemid, InventoryContainerType.Main);
@@ -547,6 +566,7 @@ namespace Oxide.Plugins
             public const string NotEnoughIngredient = "NotEnoughIngredient";
             public const string CraftingStart = "CraftingStart";
             public const string NotEnoughBloodBags = "NotEnoughBloodBags";
+            public const string InsufficientHealth = "InsufficientHealth";
         }
 
         protected override void LoadDefaultMessages()
@@ -555,9 +575,10 @@ namespace Oxide.Plugins
             {
                 [Lang.NoPermission] = "You do not have permission to craft this item.",
                 [Lang.NeedWorkbench] = "You need to be near a workbench level <color=#FFD700>{0}</color> to craft this item.",
-                [Lang.NotEnoughIngredient] = "You do not have enough <color=#FFD700>{0}</color>. Required: <color=#FFD700>{0}</color>.",
+                [Lang.NotEnoughIngredient] = "You do not have enough <color=#FFD700>{0}</color>. Required: <color=#FFD700>{1}</color>.",
                 [Lang.CraftingStart] = "Crafting blood bag... Please wait <color=#FFD700>{0}</color> seconds.",
                 [Lang.NotEnoughBloodBags] = "Not enough blood bags. Required: <color=#FFD700>{0}</color>.",
+                [Lang.InsufficientHealth] = "You don't have enough health to craft a blood bag. Required health: <color=#FFD700>{0}</color>.",
             }, this, "en");
         }
 
