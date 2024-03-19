@@ -4,6 +4,11 @@ This plugin gives a purpose to the currently unused blood bags within the game b
 
 -----------------------
 
+## How to Craft
+Once you have all the necessary ingredients in your inventory and are near the workbench of the required level, use the command specified in the config to start crafting. Be aware that crafting blood bags will sacrifice a configurable amount of your health, so make sure you have sufficient health before crafting.
+
+--------------------
+
 ## How to Consume
 Blood bags must be placed in your toolbar inventory to be consumed. Then select them and click the use button.
 
