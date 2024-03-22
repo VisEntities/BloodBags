@@ -12,7 +12,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Blood Bags", "VisEntities", "2.1.0")]
+    [Info("Blood Bags", "VisEntities", "2.2.0")]
     [Description("Craft and use blood bags to restore health, stop bleeding, boost hydration, and more.")]
     public class BloodBags : RustPlugin
     {
@@ -21,7 +21,7 @@ namespace Oxide.Plugins
         private static BloodBags _plugin;
         private static Configuration _config;
         private BloodUsageListenerManager _manager;
-        private List<Timer> _activeTimers = new List<Timer>();
+        private List<Timer> _activeCraftingTimers = new List<Timer>();
 
         private const int ITEM_ID_BLOOD = 1776460938;
         private const string ITEM_SHORTNAME_BLOOD = "blood";
@@ -37,8 +37,11 @@ namespace Oxide.Plugins
             [JsonProperty("Version")]
             public string Version { get; set; }
 
-            [JsonProperty("Health Increase")]
-            public float HealthIncrease { get; set; }
+            [JsonProperty("Instant Health Increase")]
+            public float InstantHealthIncrease { get; set; }
+
+            [JsonProperty("Health Increase Over Time")]
+            public float HealthIncreaseOverTime { get; set; }
 
             [JsonProperty("Calorie Boost")]
             public float CalorieBoost { get; set; }
@@ -153,6 +156,12 @@ namespace Oxide.Plugins
                 _config.Crafting.HealthSacrificeAmount = defaultConfig.Crafting.HealthSacrificeAmount;
             }
 
+            if (string.Compare(_config.Version, "2.2.0") < 0)
+            {
+                _config.InstantHealthIncrease = defaultConfig.InstantHealthIncrease;
+                _config.HealthIncreaseOverTime = defaultConfig.HealthIncreaseOverTime;
+            }
+
             PrintWarning("Config update complete! Updated from version " + _config.Version + " to " + Version.ToString());
             _config.Version = Version.ToString();
         }
@@ -162,7 +171,8 @@ namespace Oxide.Plugins
             return new Configuration
             {
                 Version = Version.ToString(),
-                HealthIncrease = 20f,
+                InstantHealthIncrease = 20f,
+                HealthIncreaseOverTime = 20f,
                 CalorieBoost = 100f,
                 HydrationBoost = 50f,
                 StopBleeding = true,
@@ -212,7 +222,7 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            foreach (Timer timer in _activeTimers)
+            foreach (Timer timer in _activeCraftingTimers)
             {
                 if (timer != null)
                     timer.Destroy();
@@ -386,8 +396,9 @@ namespace Oxide.Plugins
 
             private void ConsumeBlood()
             {
-                float healthIncrease = _config.HealthIncrease;
+                float healthIncrease = _config.InstantHealthIncrease;
                 Player.Heal(healthIncrease);
+                Player.metabolism.ApplyChange(MetabolismAttribute.Type.HealthOverTime, _config.HealthIncreaseOverTime, 1f);
 
                 float calorieBoost = _config.CalorieBoost;
                 Player.metabolism.calories.Add(calorieBoost);
@@ -535,22 +546,17 @@ namespace Oxide.Plugins
                 }
             });
 
-            // Using invoke instead of timer to avoid stuck game tip if plugin unloads.
-            player.Invoke(() =>
-            {
-                player.SendConsoleCommand("gametip.hidegametip");
-            }, _config.Crafting.CraftingTimeSeconds);
-
             Timer craftingTimer = timer.Once(_config.Crafting.CraftingTimeSeconds, () =>
             {
                 if (player != null)
                 {
+                    player.SendConsoleCommand("gametip.hidegametip");
                     GiveItemToPlayer(player, ITEM_ID_BLOOD, _config.Crafting.CraftingAmount, InventoryContainerType.Main);
                 }
             });
 
-            _activeTimers.Add(craftingTimer);
-            _activeTimers.Add(countdownTimer);
+            _activeCraftingTimers.Add(craftingTimer);
+            _activeCraftingTimers.Add(countdownTimer);
 
             SendReplyToPlayer(player, Lang.CraftingStart, _config.Crafting.CraftingTimeSeconds);
         }
