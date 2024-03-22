@@ -28,8 +28,9 @@ Blood bags must be placed in your toolbar inventory to be consumed. Then select 
 ## Configuration
 ```json
 {
-  "Version": "2.1.0",
-  "Health Increase": 20.0,
+  "Version": "2.2.0",
+  "Instant Health Increase": 20.0,
+  "Health Increase Over Time": 20.0,
   "Calorie Boost": 100.0,
   "Hydration Boost": 50.0,
   "Stop Bleeding": true,
@@ -38,10 +39,10 @@ Blood bags must be placed in your toolbar inventory to be consumed. Then select 
   "Amount To Consume": 2,
   "Crafting": {
     "Command": "craftblood",
-    "Health Sacrifice Amount": 15.0,
     "Workbench Level Required": 1.0,
+    "Health Sacrifice Amount": 15.0,
     "Crafting Time Seconds": 10.0,
-    "Crafting Amount": 0,
+    "Crafting Amount": 2,
     "Ingredients": [
       {
         "Shortname": "cloth",
