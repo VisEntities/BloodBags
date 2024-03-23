@@ -1,5 +1,6 @@
 ﻿using Network;
 using Newtonsoft.Json;
+using ProtoBuf;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,7 +13,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Blood Bags", "VisEntities", "2.2.0")]
+    [Info("Blood Bags", "VisEntities", "2.3.0")]
     [Description("Craft and use blood bags to restore health, stop bleeding, boost hydration, and more.")]
     public class BloodBags : RustPlugin
     {
@@ -21,13 +22,15 @@ namespace Oxide.Plugins
         private static BloodBags _plugin;
         private static Configuration _config;
         private BloodUsageListenerManager _manager;
+
         private List<Timer> _activeCraftingTimers = new List<Timer>();
 
         private const int ITEM_ID_BLOOD = 1776460938;
         private const string ITEM_SHORTNAME_BLOOD = "blood";
 
-        private const string FX_BLOOD_USE = "assets/bundled/prefabs/fx/gestures/drink_generic.prefab";
-
+        private const string FX_DRINK = "assets/bundled/prefabs/fx/gestures/drink_generic.prefab";
+        private const string FX_TAKE_DAMAGE = "assets/bundled/prefabs/fx/takedamage_generic.prefab";
+        
         #endregion Fields
 
         #region Configuration
@@ -250,6 +253,7 @@ namespace Oxide.Plugins
                 if (component == null)
                 {
                     _manager.AddBloodUsageListener(player, newItem);
+                    SendGameTip(player, lang.GetMessage(Lang.UseInstruction, this, player.UserIDString), 5f);
                 }
             }
             else if (isOldItemBloodBag && !isNewItemBloodBag)
@@ -264,7 +268,7 @@ namespace Oxide.Plugins
 
         #endregion Oxide Hooks
 
-        #region Component
+        #region Blood Usage Listener Component
 
         public class BloodUsageListenerManager
         {
@@ -368,7 +372,7 @@ namespace Oxide.Plugins
             {
                 if (_bloodItem != null && _playerInput.WasJustPressed(BUTTON.USE) && !_useButtonPressed)
                 {
-                    int amount = GetItemFromPlayer(Player, ITEM_ID_BLOOD, InventoryContainerType.Belt);
+                    int amount = GetItemAmount(ITEM_ID_BLOOD, Player.inventory.containerBelt);
                     if (amount < _config.AmountToConsume)
                     {
                         _plugin.SendReplyToPlayer(Player, Lang.NotEnoughBloodBags, _config.AmountToConsume);
@@ -392,7 +396,7 @@ namespace Oxide.Plugins
 
             #endregion Component Lifecycle
 
-            #region Blood Usage
+            #region Consuming
 
             private void ConsumeBlood()
             {
@@ -415,14 +419,14 @@ namespace Oxide.Plugins
                 float radiationReduction = _config.RadiationPoisoningReduction;
                 Player.metabolism.radiation_poison.Subtract(radiationReduction);
 
-                TakeItemFromPlayer(Player, ITEM_ID_BLOOD, _config.AmountToConsume, InventoryContainerType.Belt);
-                RunEffect(FX_BLOOD_USE, Player, boneId: 698017942);
+                TakeItem(Player, ITEM_ID_BLOOD, _config.AmountToConsume, Player.inventory.containerBelt);
+                RunEffect(FX_DRINK, Player, boneId: 698017942);
             }
 
-            #endregion Blood Usage
+            #endregion Consuming
         }
 
-        #endregion Component
+        #endregion Blood Usage Listener Component
 
         #region Utility Classes
 
@@ -445,48 +449,37 @@ namespace Oxide.Plugins
 
         #region Helper Functions
 
+        private void SendGameTip(BasePlayer player, string message, float durationSeconds, params object[] args)
+        {
+            message = string.Format(message, args);
+
+            player.SendConsoleCommand("gametip.showgametip", message);
+            timer.Once(durationSeconds, () =>
+            {
+                if (player != null)
+                    player.SendConsoleCommand("gametip.hidegametip");
+            });
+        }
+
+
         private static void RunEffect(string prefab, BaseEntity entity, uint boneId = 0, Vector3 localPosition = default(Vector3), Vector3 localDirection = default(Vector3), Connection effectRecipient = null, bool sendToAll = false)
         {
             Effect.server.Run(prefab, entity, boneId, localPosition, localDirection, effectRecipient, sendToAll);
         }
 
-        public enum InventoryContainerType
+        public static int GetItemAmount(int itemId, ItemContainer container)
         {
-            Belt,
-            Main
-        }
-
-        public static int GetItemFromPlayer(BasePlayer player, int itemId, InventoryContainerType containerType)
-        {
-            ItemContainer container;
-            if (containerType == InventoryContainerType.Belt)
-                container = player.inventory.containerBelt;
-            else
-                container = player.inventory.containerMain;
-
             return container.GetAmount(itemId, true);
         }
 
-        public static void GiveItemToPlayer(BasePlayer player, int itemId, int amount, InventoryContainerType containerType)
+        public static void GiveItem(BasePlayer player, int itemId, int amount, ItemContainer container)
         {
-            ItemContainer container;
-            if (containerType == InventoryContainerType.Belt)
-                container = player.inventory.containerBelt;
-            else
-                container = player.inventory.containerMain;
-
             container.GiveItem(ItemManager.CreateByItemID(itemId, amount));
             player.Command("note.inv", itemId, amount);
         }
 
-        public static int TakeItemFromPlayer(BasePlayer player, int itemId, int amount, InventoryContainerType containerType)
+        public static int TakeItem(BasePlayer player, int itemId, int amount, ItemContainer container)
         {
-            ItemContainer container;
-            if (containerType == InventoryContainerType.Belt)
-                container = player.inventory.containerBelt;
-            else
-                container = player.inventory.containerMain;
-
             int amountTaken = container.Take(null, itemId, amount);
             player.Command("note.inv", itemId, -amountTaken);
             return amountTaken;
@@ -511,6 +504,16 @@ namespace Oxide.Plugins
                 return;
             }
 
+            foreach (ItemInfo ingredient in _config.Crafting.Ingredients)
+            {
+                int amount = GetItemAmount(ingredient.ItemDefinition.itemid, player.inventory.containerMain);
+                if (amount < ingredient.Amount)
+                {
+                    SendReplyToPlayer(player, Lang.NotEnoughIngredient, ingredient.Shortname, ingredient.Amount);
+                    return;
+                }
+            }
+
             if (player.health > _config.Crafting.HealthSacrificeAmount)
             {
                 player.Hurt(_config.Crafting.HealthSacrificeAmount);
@@ -523,25 +526,15 @@ namespace Oxide.Plugins
 
             foreach (ItemInfo ingredient in _config.Crafting.Ingredients)
             {
-                int amount = GetItemFromPlayer(player, ingredient.ItemDefinition.itemid, InventoryContainerType.Main);
-                if (amount < ingredient.Amount)
-                {
-                    SendReplyToPlayer(player, Lang.NotEnoughIngredient, ingredient.Shortname, ingredient.Amount);
-                    return;
-                }
-            }
-
-            foreach (ItemInfo ingredient in _config.Crafting.Ingredients)
-            {
-                TakeItemFromPlayer(player, ingredient.ItemDefinition.itemid, ingredient.Amount, InventoryContainerType.Main);
+                TakeItem(player, ingredient.ItemDefinition.itemid, ingredient.Amount, player.inventory.containerMain);
             }
 
             float craftingTimeLeft = _config.Crafting.CraftingTimeSeconds;
-            Timer countdownTimer = timer.Repeat(1.0f, (int)craftingTimeLeft, () =>
+            Timer countdownTimer = timer.Repeat(1f, (int)craftingTimeLeft, () =>
             {
                 if (player != null && craftingTimeLeft > 0)
                 {
-                    player.SendConsoleCommand("gametip.showgametip", $"Crafting blood bag, <color=#FFD700>{craftingTimeLeft}</color> seconds left");
+                    SendGameTip(player, lang.GetMessage(Lang.CraftingCountdown, this, player.UserIDString), 1f, craftingTimeLeft);
                     craftingTimeLeft--;
                 }
             });
@@ -550,19 +543,19 @@ namespace Oxide.Plugins
             {
                 if (player != null)
                 {
-                    player.SendConsoleCommand("gametip.hidegametip");
-                    GiveItemToPlayer(player, ITEM_ID_BLOOD, _config.Crafting.CraftingAmount, InventoryContainerType.Main);
+                    GiveItem(player, ITEM_ID_BLOOD, _config.Crafting.CraftingAmount, player.inventory.containerMain);
                 }
             });
 
             _activeCraftingTimers.Add(craftingTimer);
             _activeCraftingTimers.Add(countdownTimer);
 
+            RunEffect(FX_TAKE_DAMAGE, player, boneId: 698017942);
             SendReplyToPlayer(player, Lang.CraftingStart, _config.Crafting.CraftingTimeSeconds);
         }
 
         #endregion Commands
-
+        
         #region Localization
 
         private class Lang
@@ -573,6 +566,8 @@ namespace Oxide.Plugins
             public const string CraftingStart = "CraftingStart";
             public const string NotEnoughBloodBags = "NotEnoughBloodBags";
             public const string InsufficientHealth = "InsufficientHealth";
+            public const string UseInstruction = "UseInstruction";
+            public const string CraftingCountdown = "CraftingCountdown";
         }
 
         protected override void LoadDefaultMessages()
@@ -585,6 +580,8 @@ namespace Oxide.Plugins
                 [Lang.CraftingStart] = "Crafting blood bag... Please wait <color=#FFD700>{0}</color> seconds.",
                 [Lang.NotEnoughBloodBags] = "Not enough blood bags. Required: <color=#FFD700>{0}</color>.",
                 [Lang.InsufficientHealth] = "You don't have enough health to craft a blood bag. Required health: <color=#FFD700>{0}</color>.",
+                [Lang.UseInstruction] = "Press <color=#FFD700>use</color> to consume",
+                [Lang.CraftingCountdown] = "Crafting blood bag, <color=#FFD700>{0}</color> seconds remaining",
             }, this, "en");
         }
 
