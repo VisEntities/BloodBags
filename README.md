@@ -69,10 +69,12 @@ Blood bags must be placed in your toolbar inventory to be consumed. Then select 
 {
   "NoPermission": "You do not have permission to craft this item.",
   "NeedWorkbench": "You need to be near a workbench level <color=#FFD700>{0}</color> to craft this item.",
-  "NotEnoughIngredient": "You do not have enough <color=#FFD700>{0}</color>. Required: <color=#FFD700>{0}</color>.",
+  "NotEnoughIngredient": "You do not have enough <color=#FFD700>{0}</color>. Required: <color=#FFD700>{1}</color>.",
   "CraftingStart": "Crafting blood bag... Please wait <color=#FFD700>{0}</color> seconds.",
   "NotEnoughBloodBags": "Not enough blood bags. Required: <color=#FFD700>{0}</color>.",
-  "InsufficientHealth": "You don't have enough health to craft a blood bag. Required health: {0}."
+  "InsufficientHealth": "You don't have enough health to craft a blood bag. Required health: <color=#FFD700>{0}</color>.",
+  "UseInstruction": "Press <color=#FFD700>use</color> to consume",
+  "CraftingCountdown": "Crafting blood bag, <color=#FFD700>{0}</color> seconds remaining"
 }
 ```
 
