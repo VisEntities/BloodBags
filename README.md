@@ -28,7 +28,7 @@ Blood bags must be placed in your toolbar inventory to be consumed. Then select 
 ## Configuration
 ```json
 {
-  "Version": "2.2.0",
+  "Version": "2.3.0",
   "Instant Health Increase": 20.0,
   "Health Increase Over Time": 20.0,
   "Calorie Boost": 100.0,
