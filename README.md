@@ -21,7 +21,7 @@ Blood bags must be placed in your toolbar inventory to be consumed. Then select 
 -----------------
 
 ## Chat Commands
-- `craftblood` - Begins the crafting of the blood bag.
+- `craftblood` - Begins crafting the blood bag.
 
 -------------
 
